@@ -50,6 +50,9 @@
                 <div class="text-center px-8">
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">ความถี่การรีเฟรช</p>
                     <select id="refresh-rate" class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1 text-sm outline-none">
+                        <option value="200">0.2 วินาที (ลื่นมาก)</option>
+<option value="500">0.5 วินาที (ปานกลาง)</option>
+                        
                         <option value="1000">1 วินาที (เร็วที่สุด)</option>
                         <option value="3000" selected>3 วินาที (แนะนำ)</option>
                         <option value="5000">5 วินาที</option>
@@ -69,63 +72,69 @@
     </div>
 
     <script>
-        // กำหนดค่ากล้อง
-        const CAM_IP = "192.168.55.100";
-        const CAM_PORT = "8000";
-        const CAM_PATH = "/cgi-bin/snap.cgi";
+    // --- ส่วนที่ปรับปรุงใหม่ ---
+const CAM_IP = "192.168.55.100";
+const CAM_PORT = "8000";
+const CAM_PATH = "/cgi-bin/snap.cgi";
+
+let streamInterval = null;
+let isStreaming = false;
+
+// 1. ฟังก์ชันนาฬิกา (คงเดิม)
+setInterval(() => {
+    document.getElementById('clock').innerText = new Date().toLocaleTimeString('th-TH');
+}, 1000);
+
+// 2. ฟังก์ชันดึงภาพแบบ High Frequency (ลื่นไหลเหมือนวิดีโอ)
+function refreshImage() {
+    const imgElement = document.getElementById('camera-live');
+    const timestamp = new Date().getTime();
+    const snapUrl = `http://${CAM_IP}:${CAM_PORT}${CAM_PATH}?ver=${timestamp}`;
+
+    // เทคนิค Pre-loading: โหลดภาพในหน่วยความจำก่อนเปลี่ยนจริงเพื่อลดการกะพริบ
+    const tempImg = new Image();
+    tempImg.src = snapUrl;
+    tempImg.onload = function() {
+        imgElement.src = snapUrl;
+    };
+    
+    tempImg.onerror = function() {
+        console.error("การเชื่อมต่อล้มเหลว");
+        if(isStreaming) stopStreaming();
+        imgElement.src = "https://via.placeholder.com/800x450?text=Camera+Offline";
+    };
+}
+
+// 3. ฟังก์ชันเปิด/ปิด ระบบสตรีมมิ่ง
+function toggleStreaming() {
+    const btn = document.getElementById('btn-stream');
+    const rateSelect = document.getElementById('refresh-rate');
+
+    if (!isStreaming) {
+        isStreaming = true;
+        // ปรับ UI ปุ่ม
+        btn.innerHTML = '<i class="fas fa-stop mr-2"></i> หยุดสตรีมมิ่ง';
+        btn.classList.replace('bg-blue-600', 'bg-red-600');
         
-        let streamInterval = null;
-        let isStreaming = false;
+        // เริ่มดึงภาพตามความถี่ที่เลือก
+        // ถ้าต้องการลื่นๆ ให้เลือก 1 วินาที หรือปรับในโค้ดเป็น 200-500ms
+        const intervalTime = parseInt(rateSelect.value);
+        streamInterval = setInterval(refreshImage, intervalTime);
+        
+        // เรียกทันทีหนึ่งครั้ง
+        refreshImage();
+    } else {
+        stopStreaming();
+    }
+}
 
-        // 1. ฟังก์ชันนาฬิกา
-        setInterval(() => {
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString('th-TH');
-        }, 1000);
-
-        // 2. ฟังก์ชันดึงภาพ (Single Snapshot)
-        function refreshImage() {
-            const img = document.getElementById('camera-live');
-            const timestamp = new Date().getTime();
-            
-            // สร้าง URL (ดึงผ่าน HTTP ตรงๆ)
-            const snapUrl = `http://${CAM_IP}:${CAM_PORT}${CAM_PATH}?ver=${timestamp}`;
-            
-            console.log("กำลังดึงภาพจาก:", snapUrl);
-            img.src = snapUrl;
-
-            img.onerror = function() {
-                console.error("ภาพโหลดไม่ได้: ติด Mixed Content หรือ IP ผิด");
-                this.src = "https://via.placeholder.com/800x450?text=Connection+Failed+Check+LAN";
-                stopStreaming();
-            };
-        }
-
-        // 3. ฟังก์ชันเปิด/ปิด การดึงภาพต่อเนื่อง (Simulated Live)
-        function toggleStreaming() {
-            const btn = document.getElementById('btn-stream');
-            const rate = document.getElementById('refresh-rate').value;
-
-            if (!isStreaming) {
-                isStreaming = true;
-                btn.innerHTML = '<i class="fas fa-stop mr-2"></i> หยุดดึงภาพ';
-                btn.classList.replace('bg-blue-600', 'bg-red-600');
-                btn.classList.replace('hover:bg-blue-700', 'hover:bg-red-700');
-                
-                refreshImage();
-                streamInterval = setInterval(refreshImage, parseInt(rate));
-            } else {
-                stopStreaming();
-            }
-        }
-
-        function stopStreaming() {
-            const btn = document.getElementById('btn-stream');
-            isStreaming = false;
-            clearInterval(streamInterval);
-            btn.innerHTML = '<i class="fas fa-play mr-2"></i> เริ่มดึงภาพสด';
-            btn.classList.replace('bg-red-600', 'bg-blue-600');
-            btn.classList.replace('hover:bg-red-700', 'hover:bg-blue-700');
-        }
+function stopStreaming() {
+    const btn = document.getElementById('btn-stream');
+    isStreaming = false;
+    clearInterval(streamInterval);
+    btn.innerHTML = '<i class="fas fa-play mr-2"></i> เริ่มดึงภาพสด';
+    btn.classList.replace('bg-red-600', 'bg-blue-600');
+}
 
     </script>
 </body>
