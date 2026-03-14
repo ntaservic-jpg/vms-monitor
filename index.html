@@ -50,7 +50,7 @@
                 <div class="text-center px-8">
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">ความถี่การรีเฟรช</p>
                     <select id="refresh-rate" class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1 text-sm outline-none">
-                        <option value="200">0.2 วินาที (ลื่นมาก)</option>
+                        <option value="100">0.1 วินาที (ลื่นมาก)</option>
 <option value="500">0.5 วินาที (ปานกลาง)</option>
                         
                         <option value="1000">1 วินาที (เร็วที่สุด)</option>
@@ -73,69 +73,57 @@
 
     <script>
     // --- ส่วนที่ปรับปรุงใหม่ ---
+// --- ส่วนที่ปรับปรุงเพื่อการแสดงผลต่อเนื่องและอัตโนมัติ ---
 const CAM_IP = "192.168.55.100";
 const CAM_PORT = "8000";
 const CAM_PATH = "/cgi-bin/snap.cgi";
+const REFRESH_MS = 100; // ตั้งค่าความเร็วที่ 0.1 วินาที (100ms)
 
 let streamInterval = null;
-let isStreaming = false;
 
-// 1. ฟังก์ชันนาฬิกา (คงเดิม)
+// 1. ฟังก์ชันนาฬิกา
 setInterval(() => {
     document.getElementById('clock').innerText = new Date().toLocaleTimeString('th-TH');
 }, 1000);
 
-// 2. ฟังก์ชันดึงภาพแบบ High Frequency (ลื่นไหลเหมือนวิดีโอ)
-function refreshImage() {
+// 2. ฟังก์ชันหลักในการดึงภาพสดแบบต่อเนื่อง
+function startStreaming() {
     const imgElement = document.getElementById('camera-live');
-    const timestamp = new Date().getTime();
-    const snapUrl = `http://${CAM_IP}:${CAM_PORT}${CAM_PATH}?ver=${timestamp}`;
-
-    // เทคนิค Pre-loading: โหลดภาพในหน่วยความจำก่อนเปลี่ยนจริงเพื่อลดการกะพริบ
-    const tempImg = new Image();
-    tempImg.src = snapUrl;
-    tempImg.onload = function() {
-        imgElement.src = snapUrl;
-    };
     
-    tempImg.onerror = function() {
-        console.error("การเชื่อมต่อล้มเหลว");
-        if(isStreaming) stopStreaming();
-        imgElement.src = "https://via.placeholder.com/800x450?text=Camera+Offline";
-    };
+    // ล้าง Interval เก่าก่อนถ้ามี
+    if (streamInterval) clearInterval(streamInterval);
+
+    streamInterval = setInterval(() => {
+        const timestamp = new Date().getTime();
+        const snapUrl = `http://${CAM_IP}:${CAM_PORT}${CAM_PATH}?ver=${timestamp}`;
+
+        // ใช้เทคนิคโหลดภาพในหน่วยความจำก่อน (Pre-loading) เพื่อความลื่นไหล
+        const tempImg = new Image();
+        tempImg.src = snapUrl;
+        
+        tempImg.onload = function() {
+            // เมื่อภาพใหม่โหลดเสร็จในหลังบ้าน จึงค่อยนำมาแสดงบนหน้าจอ
+            imgElement.src = snapUrl;
+        };
+
+        tempImg.onerror = function() {
+            console.error("การเชื่อมต่อขัดข้อง - กำลังลองใหม่...");
+            // หากพลาด จะไม่หยุดทำงาน แต่จะลองดึงใหม่ในรอบถัดไป
+        };
+    }, REFRESH_MS);
 }
 
-// 3. ฟังก์ชันเปิด/ปิด ระบบสตรีมมิ่ง
+// 3. สั่งให้ทำงานทันทีที่เปิดหน้าเว็บ (Auto-start)
+window.onload = function() {
+    console.log("เริ่มการดึงภาพสดอัตโนมัติ...");
+    startStreaming();
+};
+
+// 4. (ทางเลือก) ฟังก์ชันสำหรับปุ่มเผื่อต้องการรีสตาร์ทด้วยตัวเอง
 function toggleStreaming() {
-    const btn = document.getElementById('btn-stream');
-    const rateSelect = document.getElementById('refresh-rate');
-
-    if (!isStreaming) {
-        isStreaming = true;
-        // ปรับ UI ปุ่ม
-        btn.innerHTML = '<i class="fas fa-stop mr-2"></i> หยุดสตรีมมิ่ง';
-        btn.classList.replace('bg-blue-600', 'bg-red-600');
-        
-        // เริ่มดึงภาพตามความถี่ที่เลือก
-        // ถ้าต้องการลื่นๆ ให้เลือก 1 วินาที หรือปรับในโค้ดเป็น 200-500ms
-        const intervalTime = parseInt(rateSelect.value);
-        streamInterval = setInterval(refreshImage, intervalTime);
-        
-        // เรียกทันทีหนึ่งครั้ง
-        refreshImage();
-    } else {
-        stopStreaming();
-    }
+    startStreaming();
+    alert("กำลังรีสตาร์ทระบบดึงภาพสด...");
 }
-
-function stopStreaming() {
-    const btn = document.getElementById('btn-stream');
-    isStreaming = false;
-    clearInterval(streamInterval);
-    btn.innerHTML = '<i class="fas fa-play mr-2"></i> เริ่มดึงภาพสด';
-    btn.classList.replace('bg-red-600', 'bg-blue-600');
-}
-
     </script>
 </body>
 </html>
